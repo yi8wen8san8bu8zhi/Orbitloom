@@ -3,6 +3,7 @@ import SwiftUI
 struct ProjectFilesView: View {
     let project: Project
     let onShowResult: (RunResultSelection) -> Void
+    @Environment(ProjectStore.self) private var store
     @Environment(RunManager.self) private var runner
     @State private var relativeDirectory = ""
     @State private var files: [ProjectFile] = []
@@ -50,6 +51,7 @@ struct ProjectFilesView: View {
                                             Text(status.title).font(.caption).foregroundStyle(status.color)
                                         }.padding(.vertical, 7).contentShape(Rectangle())
                                     }.buttonStyle(.plain)
+                                    startButton(for: script.relativePath)
                                     Button("查看结果", systemImage: "rectangle.bottomthird.inset.filled") { showResult(for: script) }
                                         .buttonStyle(.borderless)
                                 }
@@ -122,6 +124,9 @@ struct ProjectFilesView: View {
                     Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain).disabled(!file.isDirectory && file.kind == nil)
+            if !file.isDirectory && file.kind != nil {
+                startButton(for: file.relativePath)
+            }
             if let saved = project.scripts.first(where: { $0.relativePath == file.relativePath }) {
                 Button("查看结果", systemImage: "rectangle.bottomthird.inset.filled") { showResult(for: saved) }
                     .labelStyle(.iconOnly).buttonStyle(.borderless).help("查看执行结果")
@@ -130,6 +135,43 @@ struct ProjectFilesView: View {
                 FilePanels.reveal(URL(fileURLWithPath: project.path).appendingPathComponent(file.relativePath).path)
             }.labelStyle(.iconOnly).buttonStyle(.borderless)
         }.padding(14).background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    /// 为两处脚本列表提供启动入口，运行中或项目丢失时禁用。
+    private func startButton(for relativePath: String) -> some View {
+        let saved = project.scripts.first(where: { $0.relativePath == relativePath })
+        let isActive = saved.map { runner.snapshot(for: $0.id).status.isActive } ?? false
+        return Button("启动", systemImage: "play.fill") {
+            Task { await startScript(relativePath) }
+        }.buttonStyle(.borderedProminent).tint(.indigo).controlSize(.small)
+            .disabled(isActive || project.isMissing)
+    }
+
+    /// 使用已确认配置启动脚本并显示结果；尚未配置时打开脚本详情。
+    private func startScript(_ relativePath: String) async {
+        guard let parent = store.project(id: project.id) else {
+            runner.errorMessage = "所属项目已从资料库移除。"
+            return
+        }
+        guard let saved = parent.scripts.first(where: { $0.relativePath == relativePath }),
+              saved.configuration.confirmedAt != nil, !saved.configuration.command.isEmpty else {
+            selectedScript = ProjectFile(relativePath: relativePath,
+                                         name: (relativePath as NSString).lastPathComponent,
+                                         isDirectory: false, kind: nil)
+            return
+        }
+        do {
+            let root = parent.path
+            var script = try await Task.detached(priority: .userInitiated) {
+                try ProjectFileBrowser.inspectScript(root: root, relativePath: relativePath)
+            }.value
+            script.id = saved.id
+            script.configuration = saved.configuration
+            script.hasSavedConfiguration = true
+            try store.validateScript(script, at: ScriptLocation(projectID: parent.id, relativePath: relativePath))
+            runner.start(script)
+            showResult(for: saved)
+        } catch { runner.errorMessage = error.localizedDescription }
     }
 
     /// 直接按已保存的脚本标识打开结果，即使原文件失效也能读取日志或停止实例。

@@ -69,14 +69,17 @@ final class RunManager {
         snapshots[id] = RunSnapshot(log: String(decoding: bounded, as: UTF8.self))
     }
 
-    /// 在用户确认的配置上检查路径与环境，然后启动一个受管实例。
+    /// 在用户确认的配置上检查启动命令、路径与环境，然后启动一个受管实例。
     func start(_ project: Project) {
         guard instances[project.id] == nil else { return }
         let id = project.id
         do {
+            let configuration = project.configuration
+            guard !configuration.command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw OrbitloomError.message("启动前请填写启动命令，或从识别结果中选择入口。")
+            }
             guard !project.needsConfiguration else { throw OrbitloomError.message("请先检查并保存运行配置。") }
             guard FileManager.default.fileExists(atPath: project.path) else { throw OrbitloomError.message("原位置不存在，请先重新定位项目。") }
-            let configuration = project.configuration
             try RuntimeEnvironment.validateConfiguration(configuration)
             let environment = try RuntimeEnvironment.build(configuration)
             let directory = ProjectScanner.canonicalPath(configuration.workingDirectory)

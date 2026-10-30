@@ -28,7 +28,7 @@ struct ProjectEditorView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(scriptLocation == nil ? "检查运行配置" : "配置脚本：\(project.name)").font(.title2.weight(.semibold))
-                    Text("确认一次，下次即可直接启动。扫描会保留你保存的修改。")
+                    Text("启动命令可留空，启动前再补充。扫描会保留你保存的修改。")
                         .font(.callout).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -51,7 +51,7 @@ struct ProjectEditorView: View {
                             }
                         } label: { Label("选择识别到的入口（\(project.detected.launchOptions.count)）", systemImage: "list.bullet") }
                     }
-                    TextField("启动命令", text: $configuration.command, axis: .vertical).font(.system(.body, design: .monospaced)).lineLimit(2...5)
+                    TextField("启动命令（可选）", text: $configuration.command, axis: .vertical).font(.system(.body, design: .monospaced)).lineLimit(2...5)
                     TextField("附加参数（可选）", text: $configuration.arguments)
                     Picker("运行方式", selection: $configuration.mode) { ForEach(RunMode.allCases) { Text($0.title).tag($0) } }
                     HStack {

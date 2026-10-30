@@ -19,11 +19,8 @@ nonisolated struct RuntimeEnvironment {
         return values
     }
 
-    /// 在配置保存入口校验格式，实际路径和运行时在启动时检查。
+    /// 在配置保存入口校验格式，允许启动命令留空；命令、实际路径和运行时在启动时检查。
     static func validateConfiguration(_ configuration: RunConfiguration) throws {
-        guard !configuration.command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw OrbitloomError.message("请填写启动命令，或从识别结果中选择入口。")
-        }
         guard configuration.workingDirectory.hasPrefix("/") || configuration.workingDirectory.hasPrefix("~/") else {
             throw OrbitloomError.message("工作目录需要使用绝对路径或 ~/ 路径。")
         }

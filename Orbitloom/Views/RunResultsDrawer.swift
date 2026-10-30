@@ -9,15 +9,20 @@ struct RunResultSelection: Identifiable {
 
 struct RunResultsDrawer: View {
     let result: RunResultSelection
+    @Binding var height: CGFloat
+    let maximumHeight: CGFloat
     let onClose: () -> Void
     @Environment(RunManager.self) private var runner
     @State private var followLog = true
+    @State private var resizeStartHeight: CGFloat?
 
     private var run: RunSnapshot { runner.snapshot(for: result.id) }
+    private var displayedHeight: CGFloat { min(maximumHeight, max(220, height)) }
 
     var body: some View {
         VStack(spacing: 0) {
             Divider()
+            resizeHandle
             HStack(spacing: 16) {
                 Image(systemName: "terminal").font(.title3).foregroundStyle(.indigo)
                 VStack(alignment: .leading, spacing: 4) {
@@ -43,9 +48,29 @@ struct RunResultsDrawer: View {
             Divider()
             RunLogView(run: run, followLog: $followLog)
         }
+        .frame(height: displayedHeight)
         .background(.background)
         .shadow(color: .black.opacity(0.12), radius: 12, y: -4)
         .task(id: result.id) { runner.loadLog(for: result.id) }
+    }
+
+    /// 拖动抽屉顶部调整高度，使用全局位移避免顶部移动影响拖动距离。
+    private var resizeHandle: some View {
+        Capsule().fill(.secondary.opacity(0.5))
+            .frame(width: 36, height: 3)
+            .frame(maxWidth: .infinity).frame(height: 10)
+            .contentShape(Rectangle())
+            .pointerStyle(.rowResize)
+            .help("上下拖动调整终端高度")
+            .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .onChanged { value in
+                        let startHeight = resizeStartHeight ?? displayedHeight
+                        resizeStartHeight = startHeight
+                        height = min(maximumHeight, max(220, startHeight - value.translation.height))
+                    }
+                    .onEnded { _ in resizeStartHeight = nil }
+            )
     }
 }
 
@@ -66,17 +91,21 @@ struct RunLogView: View {
                 }.disabled(run.log.isEmpty)
             }.padding(.horizontal, 22).padding(.vertical, 12)
             Divider()
-            ScrollViewReader { proxy in
-                ScrollView([.horizontal, .vertical]) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(run.log.isEmpty ? "暂无运行日志。启动后，输出会显示在这里。" : run.log)
-                            .font(.system(size: 12, design: .monospaced)).foregroundStyle(Color(red: 0.81, green: 0.85, blue: 0.91))
-                            .textSelection(.enabled).lineSpacing(4).fixedSize(horizontal: true, vertical: true)
-                        Color.clear.frame(height: 1).id("logEnd")
-                    }.padding(22).frame(minWidth: 600, alignment: .topLeading)
-                }.background(Color(red: 0.075, green: 0.085, blue: 0.115))
-                    .onChange(of: run.log) { _, _ in if followLog { proxy.scrollTo("logEnd", anchor: .bottomLeading) } }
-                    .onAppear { if followLog { proxy.scrollTo("logEnd", anchor: .bottomLeading) } }
+            GeometryReader { geometry in
+                ScrollViewReader { proxy in
+                    ScrollView([.horizontal, .vertical]) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(run.log.isEmpty ? "暂无运行日志。启动后，输出会显示在这里。" : run.log)
+                                .font(.system(size: 12, design: .monospaced)).foregroundStyle(Color(red: 0.81, green: 0.85, blue: 0.91))
+                                .textSelection(.enabled).lineSpacing(4).fixedSize(horizontal: true, vertical: true)
+                            Color.clear.frame(width: 1, height: 1).id("logEnd")
+                        }.padding(22)
+                            .frame(minWidth: geometry.size.width, minHeight: geometry.size.height, alignment: .topLeading)
+                    }.background(Color(red: 0.075, green: 0.085, blue: 0.115))
+                        .onChange(of: run.log) { _, _ in if followLog { proxy.scrollTo("logEnd", anchor: .bottomLeading) } }
+                        .onChange(of: geometry.size) { _, _ in if followLog { proxy.scrollTo("logEnd", anchor: .bottomLeading) } }
+                        .onAppear { if followLog { proxy.scrollTo("logEnd", anchor: .bottomLeading) } }
+                }
             }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
     }

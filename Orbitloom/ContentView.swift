@@ -12,6 +12,7 @@ struct ContentView: View {
     @State private var isShowingDiscovery = false
     @State private var isShowingAddProject = false
     @State private var result: RunResultSelection?
+    @State private var resultHeight: CGFloat = 320
 
     private var filteredProjects: [Project] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -184,10 +185,15 @@ struct ContentView: View {
             selectedProjectIDs.formIntersection(ids)
         }
         .overlay(alignment: .bottom) {
-            if let result {
-                RunResultsDrawer(result: result, onClose: { self.result = nil })
-                    .id(result.id).frame(height: 320)
-                    .transition(.move(edge: .bottom))
+            GeometryReader { geometry in
+                if let result {
+                    RunResultsDrawer(result: result, height: $resultHeight,
+                                     maximumHeight: max(220, geometry.size.height * 0.8),
+                                     onClose: { self.result = nil })
+                        .id(result.id)
+                        .transition(.move(edge: .bottom))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                }
             }
         }
         .animation(.easeInOut(duration: 0.22), value: result != nil)
