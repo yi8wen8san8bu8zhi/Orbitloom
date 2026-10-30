@@ -113,7 +113,7 @@ nonisolated struct ProjectParser {
                 else if first.contains("bash") || url.pathExtension == "bash" { interpreter = "/bin/bash" }
                 else { interpreter = "/bin/sh" }
                 command = "\(interpreter) \(quoted)"
-            case .unknown: command = ""
+            case .folder, .unknown: command = ""
             }
             detected.launchOptions = [LaunchOption(command: command, source: "\(url.lastPathComponent) · 文件类型 / shebang")]
             detected.evidence.append(Evidence(label: "简介", value: detected.summary.isEmpty ? "未发现头部说明" : detected.summary, source: url.lastPathComponent))

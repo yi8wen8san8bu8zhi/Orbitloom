@@ -25,14 +25,14 @@ struct ProjectDetailView: View {
                         Text(project.name).font(.system(size: 27, weight: .semibold)).textSelection(.enabled)
                         HStack(spacing: 8) {
                             badge(project.kind.title, color: .indigo)
-                            badge(projectStatus.title, color: projectStatus.color)
+                            if project.kind != .folder { badge(projectStatus.title, color: projectStatus.color) }
                             if project.isMissing { badge("原位置不存在", color: .orange) }
                             else if project.needsConfiguration { badge(project.isDirectory ? "项目启动待配置" : "待配置", color: .orange) }
-                            else { badge("配置已确认", color: .secondary) }
+                            else if project.kind != .folder { badge("配置已确认", color: .secondary) }
                         }
                     }
                     Spacer()
-                    Button("编辑配置", systemImage: "slider.horizontal.3") { editing = true }.disabled(projectStatus.isActive)
+                    Button(project.kind == .folder ? "编辑信息" : "编辑配置", systemImage: "slider.horizontal.3") { editing = true }.disabled(projectStatus.isActive)
                 }
                 HStack(spacing: 7) {
                     Image(systemName: "folder")
@@ -45,8 +45,10 @@ struct ProjectDetailView: View {
                     Picker("项目详情", selection: $tab) {
                         Text("概览").tag("overview")
                         if project.isDirectory { Text("文件").tag("files") }
-                        Text("运行配置").tag("configuration")
-                        if project.isDirectory { Text("运行日志").tag("logs") }
+                        if project.kind != .folder {
+                            Text("运行配置").tag("configuration")
+                            if project.isDirectory { Text("运行日志").tag("logs") }
+                        }
                     }.pickerStyle(.segmented).frame(maxWidth: 460)
                     if !project.isDirectory {
                         Button("查看结果", systemImage: "rectangle.bottomthird.inset.filled") { showResult() }
@@ -64,8 +66,13 @@ struct ProjectDetailView: View {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 5) {
                                         Label("原位置不存在", systemImage: "exclamationmark.folder").foregroundStyle(.orange)
-                                        Text(scriptLocation == nil ? "备注和配置已保留。重新定位后，请核对命令并保存配置。" : "配置和日志已保留。请检查文件位置与权限，恢复后重新打开脚本。")
-                                            .font(.caption).foregroundStyle(.secondary)
+                                        Group {
+                                            if project.kind == .folder {
+                                                Text("项目信息已保留，请重新定位文件夹。")
+                                            } else {
+                                                Text(scriptLocation == nil ? "备注和配置已保留。重新定位后，请核对命令并保存配置。" : "配置和日志已保留。请检查文件位置与权限，恢复后重新打开脚本。")
+                                            }
+                                        }.font(.caption).foregroundStyle(.secondary)
                                     }
                                     Spacer()
                                     if scriptLocation == nil {
@@ -81,6 +88,10 @@ struct ProjectDetailView: View {
             Divider()
             if tab == "files" {
                 Text("点击脚本查看配置和日志；首次确认配置后即可运行。")
+                    .font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 28).padding(.vertical, 18).background(.bar)
+            } else if project.kind == .folder {
+                Text("文件夹无需启动，可在「文件」中浏览内容和运行脚本。")
                     .font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 28).padding(.vertical, 18).background(.bar)
             } else {
@@ -103,12 +114,19 @@ struct ProjectDetailView: View {
         .sheet(isPresented: $editing) { ProjectEditorView(project: project, scriptLocation: scriptLocation) }
         .sheet(isPresented: $editingTags) { ProjectTagsEditorView(project: project) }
         .task { runner.loadLog(for: project.id) }
+        .onChange(of: project.kind) { _, kind in
+            if kind == .folder && (tab == "configuration" || tab == "logs") { tab = "overview" }
+        }
     }
 
     private var overview: some View {
         VStack(alignment: .leading, spacing: 22) {
             detailSection("用途说明", symbol: "text.alignleft") {
-                let fallbackSummary = scriptLocation == nil ? "尚未识别到用途说明，可在编辑配置中补充。" : "未识别到脚本头部用途说明。"
+                let fallbackSummary: String = if project.kind == .folder {
+                    "尚未填写用途说明，可在编辑信息中补充。"
+                } else {
+                    scriptLocation == nil ? "尚未识别到用途说明，可在编辑配置中补充。" : "未识别到脚本头部用途说明。"
+                }
                 Text(project.summary.isEmpty ? fallbackSummary : project.summary)
                     .foregroundStyle(project.summary.isEmpty ? .secondary : .primary).textSelection(.enabled).lineSpacing(5)
             }
@@ -134,7 +152,10 @@ struct ProjectDetailView: View {
                 }
             }
             detailSection("本地识别结果", symbol: "doc.text.magnifyingglass") {
-                if project.detected.evidence.isEmpty { Text("未找到明确的环境和依赖声明，请手动补充运行配置。").foregroundStyle(.secondary) }
+                if project.detected.evidence.isEmpty {
+                    Text(project.kind == .folder ? "未找到项目识别信息，可按需要补充用途和备注。" : "未找到明确的环境和依赖声明，请手动补充运行配置。")
+                        .foregroundStyle(.secondary)
+                }
                 ForEach(Array(project.detected.evidence.enumerated()), id: \.offset) { _, item in
                     VStack(alignment: .leading, spacing: 6) {
                         Text(item.label).font(.callout.weight(.medium))

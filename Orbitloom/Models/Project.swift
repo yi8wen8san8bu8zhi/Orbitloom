@@ -1,7 +1,7 @@
 import Foundation
 
 nonisolated enum ProjectKind: String, Codable, CaseIterable, Identifiable, Sendable {
-    case python, node, shell, unknown
+    case python, node, shell, folder, unknown
 
     var id: String { rawValue }
     var title: String {
@@ -9,6 +9,7 @@ nonisolated enum ProjectKind: String, Codable, CaseIterable, Identifiable, Senda
         case .python: "Python"
         case .node: "Node.js"
         case .shell: "Shell"
+        case .folder: "文件夹"
         case .unknown: "待识别"
         }
     }
@@ -17,7 +18,7 @@ nonisolated enum ProjectKind: String, Codable, CaseIterable, Identifiable, Senda
         case .python: "chevron.left.forwardslash.chevron.right"
         case .node: "shippingbox"
         case .shell: "terminal"
-        case .unknown: "folder"
+        case .folder, .unknown: "folder"
         }
     }
 }
@@ -108,7 +109,8 @@ nonisolated struct Project: Codable, Identifiable, Sendable {
     var name: String { customName ?? detected.name }
     var summary: String { customSummary ?? detected.summary }
     var kind: ProjectKind { customKind ?? detected.kind }
-    var needsConfiguration: Bool { configuration.confirmedAt == nil || configuration.command.isEmpty }
+    /// 文件夹只收录和浏览内容，无需配置项目启动命令。
+    var needsConfiguration: Bool { kind != .folder && (configuration.confirmedAt == nil || configuration.command.isEmpty) }
 
     private enum CodingKeys: String, CodingKey {
         case id, path, isDirectory, detected, customName, customSummary, customKind, notes, tags

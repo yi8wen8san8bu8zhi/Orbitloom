@@ -195,9 +195,10 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 }
             }
+            // 仅裁剪抽屉，避免影响分栏视图对系统标题栏安全区域的处理。
+            .clipped()
         }
         .animation(.easeInOut(duration: 0.22), value: result != nil)
-        .clipped()
         .frame(minWidth: 980, minHeight: 650)
     }
 
@@ -271,40 +272,77 @@ private enum TagFilter: Hashable {
 private struct ProjectRow: View {
     let project: Project
     let status: RunStatus
+    @State private var isShowingInfo = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(spacing: 12) {
             Image(systemName: project.kind.symbol).font(.system(size: 17, weight: .medium))
                 .foregroundStyle(.indigo).frame(width: 34, height: 34)
                 .background(.indigo.opacity(0.09), in: RoundedRectangle(cornerRadius: 9))
             VStack(alignment: .leading, spacing: 5) {
-                HStack {
+                HStack(spacing: 8) {
                     Text(project.name).font(.headline).lineLimit(1)
                     Spacer(minLength: 2)
                     Circle().fill(status.color).frame(width: 6, height: 6).help(status.title)
-                }
-                Text(project.summary.isEmpty ? "暂无用途说明" : project.summary).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                if !project.tags.isEmpty {
-                    HStack(spacing: 5) {
-                        ForEach(Array(project.tags.prefix(2)), id: \.self) { tag in
-                            ProjectTagLabel(tag: tag)
-                        }
-                        if project.tags.count > 2 {
-                            Text("+\(project.tags.count - 2)").font(.caption2).foregroundStyle(.secondary)
-                                .help(project.tags.dropFirst(2).joined(separator: "、"))
-                        }
+                        .accessibilityLabel(status.title)
+                    if project.isMissing || project.needsConfiguration {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption).foregroundStyle(.orange)
+                            .help(project.isMissing ? "原位置不存在" : "待配置")
+                            .accessibilityLabel(project.isMissing ? "原位置不存在" : "待配置")
                     }
+                    Button { isShowingInfo.toggle() } label: {
+                        Image(systemName: "info.circle").font(.callout)
+                    }.buttonStyle(.borderless).foregroundStyle(.secondary)
+                        .help("查看项目信息").accessibilityLabel("查看 \(project.name) 的信息")
+                        .popover(isPresented: $isShowingInfo, arrowEdge: .trailing) {
+                            projectInformation
+                        }
                 }
-                Text(project.path).font(.system(size: 10, design: .monospaced)).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.middle)
-                HStack(spacing: 6) {
-                    Text(project.kind.title)
-                    Text("·")
-                    Text(status.title).foregroundStyle(status.color)
-                    if project.isMissing { Text("· 原位置不存在").foregroundStyle(.orange) }
-                    else if project.needsConfiguration { Text("· 待配置").foregroundStyle(.orange) }
-                }.font(.system(size: 10))
+                Text(project.summary.isEmpty ? "暂无用途说明" : project.summary)
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
         }.padding(.vertical, 8)
+    }
+
+    /// 在可滚动的悬浮窗中展示完整项目资料，并支持选择、复制文本。
+    private var projectInformation: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(project.name).font(.headline)
+                    HStack(spacing: 8) {
+                        Label(project.kind.title, systemImage: project.kind.symbol)
+                            .foregroundStyle(.secondary)
+                        Text("·").foregroundStyle(.tertiary)
+                        Label(status.title, systemImage: "circle.fill").foregroundStyle(status.color)
+                    }.font(.caption)
+                    if project.isMissing {
+                        Label("原位置不存在", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption).foregroundStyle(.orange)
+                    } else if project.needsConfiguration {
+                        Label("待配置", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption).foregroundStyle(.orange)
+                    }
+                }
+                Divider()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("用途").font(.caption).foregroundStyle(.secondary)
+                    Text(project.summary.isEmpty ? "暂无用途说明" : project.summary).font(.callout)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("标签").font(.caption).foregroundStyle(.secondary)
+                    Text(project.tags.isEmpty ? "暂无标签" : project.tags.joined(separator: "、"))
+                        .font(.callout)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("路径").font(.caption).foregroundStyle(.secondary)
+                    Text(project.path).font(.system(.caption, design: .monospaced))
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(20)
+                .textSelection(.enabled)
+        }.frame(width: 340).frame(maxHeight: 420)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
